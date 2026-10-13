@@ -340,6 +340,16 @@ h1,h2,h3{font-weight:700;letter-spacing:-.015em}
 .mini.soon{background:var(--sand);border-style:dashed;cursor:not-allowed;opacity:.72;filter:grayscale(.6)}
 .mini.soon b{color:var(--muted)}
 .soon-tag{font-size:9px;font-weight:800;letter-spacing:.06em;color:var(--muted);background:#fff;border:1px solid var(--line);border-radius:999px;padding:4px 8px;white-space:nowrap}
+/* spin wheel undian */
+.wheel-wrap{position:relative;width:min(280px,100%);aspect-ratio:1;margin:20px auto 0}
+.wheel{width:100%;height:100%;display:block;border-radius:50%;box-shadow:0 0 0 4px #3A3859,0 10px 30px rgba(0,0,0,.35)}
+.wheel-pin{position:absolute;top:-10px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:14px solid transparent;border-right:14px solid transparent;border-top:26px solid #FFC53D;z-index:2;filter:drop-shadow(0 2px 2px rgba(0,0,0,.4))}
+.wheel-hub{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:74px;height:74px;border-radius:50%;background:#15142A;color:#FFC53D;font-weight:800;font-size:13px;letter-spacing:.06em;border:4px solid #FFC53D;z-index:2}
+.wheel-hub:disabled{color:#6B6A85;border-color:#3A3859}
+.wheel-name{margin-top:16px;padding:12px 14px;border-radius:16px;background:#15142A;text-align:center;display:flex;flex-direction:column;gap:4px}
+.wheel-name b{font-family:Inter,system-ui,sans-serif;font-size:17px;color:#fff;min-height:22px}
+.win-pop{text-align:center}
+.win-pop .big{font-family:Inter,system-ui,sans-serif;font-size:22px;font-weight:700;margin-top:6px;line-height:1.3}
 /* ===== v7: versi deploy ===== */
 .busy{position:absolute;inset:0;z-index:60;display:none;align-items:center;justify-content:center;background:rgba(255,247,236,.55)}
 .busy.on{display:flex}
@@ -499,6 +509,7 @@ button:disabled{opacity:.55}
 <section class="screen" id="admin-peserta" style="background:#15142A;color:#fff"></section>
 <section class="screen" id="admin-soal" style="background:#15142A;color:#fff"></section>
 <section class="screen" id="admin-saran" style="background:#15142A;color:#fff"></section>
+<section class="screen" id="admin-undian" style="background:#15142A;color:#fff"></section>
 <div class="modal" id="modal"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <div class="busy" id="busy" aria-hidden="true"><i></i></div>
@@ -1949,7 +1960,22 @@ var ADM = null, ATOK = null, QZ = null, RES = null, MOD = null, REVI = 0, pin = 
 
 function catOf(t){ return (S.cfg.topik_kategori || {})[t.id] || t.cat; }
 function vis(){ var h = S.cfg.topik_sembunyi || []; return TOPICS.filter(function(t){ return h.indexOf(t.id) < 0; }); }
-function doneLv(){ return (S.hasil[1]?1:0) + (S.hasil[2]?1:0); }
+/* level yang ditampilkan ke peserta: level yang sedang dibuka admin, plus level yang sudah pernah dikerjakan */
+var LEVELS = [1,2];
+function shownLv(){ return LEVELS.filter(function(n){ return !!S.cfg.buka[n] || !!S.hasil[n]; }); }
+function doneLv(){ return shownLv().filter(function(n){ return S.hasil[n]; }).length; }
+function kuisSub(){
+  var L = shownLv(), d = doneLv();
+  if(!L.length) return 'Belum dibuka';
+  if(L.length === 1) return lvName(L[0])+' &middot; '+(d ? 'sudah dikerjakan' : 'belum dikerjakan');
+  return L.length+' level &middot; '+d+'/'+L.length+' dikerjakan';
+}
+function riwayatSub(){
+  var L = shownLv(), d = doneLv();
+  if(!L.length) return 'Belum ada kuis';
+  if(L.length === 1) return d ? 'Skor '+S.hasil[L[0]].skor : 'Belum ada riwayat';
+  return d+' dari '+L.length+' level selesai';
+}
 function lvName(n){ return 'Kuis Level '+n; }
 function lvDesc(n){ return n===1 ? 'Soal campuran: keranjang, pilihan ganda, benar atau salah, hitung cepat' : 'Pilih keputusan terbaik dari studi kasus sehari-hari'; }
 function lvCount(n){ return n===1 ? S.cfg.n1 : S.cfg.n2; }
@@ -2071,7 +2097,7 @@ R['splash'] = function(){
     '<div><div style="font-family:Inter,sans-serif;font-size:44px;font-weight:700;color:#fff;letter-spacing:1px">CELENGAN</div>'+
     '<div style="margin-top:8px;font-size:14px;font-weight:600;color:#E4DCFF;line-height:1.55">Cerdas Literasi Keuangan<br>KPwBI Daerah Istimewa Yogyakarta</div></div>'+
     '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">'+
-      '<span class="chip" style="background:#5637DE;color:#E4DCFF">'+TOPICS.length+' topik</span><span class="chip" style="background:#5637DE;color:#E4DCFF">2 level kuis</span><span class="chip" style="background:#5637DE;color:#E4DCFF">'+GLOSS.length+' istilah</span></div>'+
+      '<span class="chip" style="background:#5637DE;color:#E4DCFF">'+TOPICS.length+' topik</span><span class="chip" style="background:#5637DE;color:#E4DCFF">kuis interaktif</span><span class="chip" style="background:#5637DE;color:#E4DCFF">'+GLOSS.length+' istilah</span></div>'+
     (API.REMOTE ? '' : '<span class="demo-chip">MODE DEMO &middot; DATA HANYA DI BROWSER INI</span>')+
   '</div>'+
   '<div style="position:relative;width:100%;margin-top:40px">'+
@@ -2173,10 +2199,10 @@ R['beranda'] = function(){
       '<button class="menu-card" style="background:var(--green);box-shadow:0 5px 0 var(--green-d)" data-act="tab" data-arg="belajar-topik"><span class="sq" style="background:var(--mint)">'+ic('book','#04372A',26)+'</span>'+
       '<span class="grow"><span style="display:block;font-family:Inter,sans-serif;font-size:21px;font-weight:600;color:#fff">Belajar</span><span style="display:block;margin-top:2px;font-size:12.5px;color:#C8F2E3">'+vis().length+' topik &middot; baca, mitos atau fakta, studi kasus</span></span>'+ic('chev','#fff',22)+'</button>'+
       '<button class="menu-card" style="background:var(--pink);box-shadow:0 5px 0 var(--pink-d)" data-act="tab" data-arg="quiz-level"><span class="sq" style="background:#FF7BAC">'+ic('bars','#fff',26)+'</span>'+
-      '<span class="grow"><span style="display:block;font-family:Inter,sans-serif;font-size:21px;font-weight:600;color:#fff">Kuis</span><span style="display:block;margin-top:2px;font-size:12.5px;color:#FFD6E5">2 level &middot; '+doneLv()+'/2 dikerjakan</span></span>'+ic('chev','#fff',22)+'</button></div>'+
+      '<span class="grow"><span style="display:block;font-family:Inter,sans-serif;font-size:21px;font-weight:600;color:#fff">Kuis</span><span style="display:block;margin-top:2px;font-size:12.5px;color:#FFD6E5">'+kuisSub()+'</span></span>'+ic('chev','#fff',22)+'</button></div>'+
     '<div class="mgrid" style="margin-top:14px">'+
       '<button class="mini" data-go="kamus"><span class="ico" style="background:var(--green-l)">'+ic('dict','#047857',20)+'</span><b>Kamus Istilah</b><span class="s">'+GLOSS.length+' istilah per topik</span></button>'+
-      '<button class="mini" data-act="tab" data-arg="profil"><span class="ico" style="background:var(--yellow-l)">'+ic('bars','#8A4B00',20)+'</span><b>Riwayat Kuis</b><span class="s">'+doneLv()+' dari 2 level selesai</span></button></div>'+
+      '<button class="mini" data-act="tab" data-arg="profil"><span class="ico" style="background:var(--yellow-l)">'+ic('bars','#8A4B00',20)+'</span><b>Riwayat Kuis</b><span class="s">'+riwayatSub()+'</span></button></div>'+
     '<div class="mini-wide" aria-disabled="true"><span class="ico" style="width:38px;height:38px;border-radius:12px;background:#fff;display:flex;align-items:center;justify-content:center">'+ic('calc','#9A98B0',20)+'</span>'+
       '<span class="grow"><b style="font-size:13px;color:var(--muted)">Alat Keuangan</b><span style="display:block;font-size:11px;color:var(--muted);margin-top:2px">Kalkulator keuangan sedang disiapkan</span></span><span class="soon-tag">SEGERA HADIR</span></div>'+
     '<div class="label" style="margin-top:20px">'+(lt?'LANJUTKAN':'MULAI DARI SINI')+'</div>'+
@@ -2340,24 +2366,26 @@ R['quiz-level'] = function(){
       '<span class="row" style="margin-top:14px;gap:7px;flex-wrap:wrap">'+chips+'</span>'+
       '<span style="display:block;margin-top:12px;padding:12px 14px;border-radius:15px;background:'+(live?colL:'#fff')+';font-size:11.5px;color:'+(live?col:'var(--muted)')+';line-height:1.6">'+inf.note+'</span></button>';
   }
-  var rules = ['Level 1 dan Level 2 bisa dikerjakan kapan saja'+(p?' selama periode kuis':'')+', tidak harus berurutan.',
-    'Setiap level hanya bisa dikerjakan 1 kali. Skor yang muncul pertama kali langsung jadi skor final.',
-    'Semua peserta mendapat paket soal yang sama.',
-    'Level 1: setiap jawaban yang dikunci langsung tersimpan. Keluar di tengah tidak menghitung skor, dan kamu lanjut dari soal berikutnya saat kembali.',
-    'Level 2: keluar di tengah tidak dihitung dan kuis bisa dimulai lagi dari awal.',
-    'Tidak ada batas waktu. Kerjakan dengan tenang.',
-    'Kunci dan pembahasan terbuka setelah jawaban dikumpulkan.'];
-  if(p) rules.push('Peringkat dihitung dari 80% skor kuis dan 20% kecepatan mengumpulkan. Makin awal dikumpulkan dalam periode, makin tinggi nilai kecepatannya.');
+  var L = shownLv(), multi = L.length > 1;
+  var rules = [multi ? L.map(function(n){ return 'Level '+n; }).join(' dan ')+' bisa dikerjakan kapan saja'+(p?' selama periode kuis':'')+', tidak harus berurutan.'
+                     : 'Kuis bisa dikerjakan kapan saja'+(p?' selama periode kuis':'')+'.',
+    (multi ? 'Setiap level hanya bisa dikerjakan 1 kali.' : 'Kuis hanya bisa dikerjakan 1 kali.')+' Skor yang muncul pertama kali langsung jadi skor final.',
+    'Semua peserta mendapat paket soal yang sama.'];
+  if(L.indexOf(1) >= 0) rules.push((multi?'Level 1: s':'S')+'etiap jawaban yang dikunci langsung tersimpan. Keluar di tengah tidak menghitung skor, dan kamu lanjut dari soal berikutnya saat kembali.');
+  if(L.indexOf(2) >= 0) rules.push((multi?'Level 2: k':'K')+'eluar di tengah tidak dihitung dan kuis bisa dimulai lagi dari awal.');
+  rules.push('Tidak ada batas waktu. Kerjakan dengan tenang.', 'Kunci dan pembahasan terbuka setelah jawaban dikumpulkan.');
+  if(p) rules.push('Peringkat dihitung'+(multi?' per level':'')+' dari 80% skor kuis dan 20% kecepatan mengumpulkan. Makin awal dikumpulkan dalam periode, makin tinggi nilai kecepatannya.');
+  var COL = {1:['var(--pink)','var(--pink-l)'], 2:['var(--purple)','var(--purple-l)']};
   return '<div class="qhead"><div style="position:relative;max-width:190px"><button class="icon-btn back-on-head" data-act="tab" data-arg="beranda" aria-label="Kembali ke beranda">'+ic('back','#fff',20)+'</button><h1 style="font-size:26px;color:#fff">Kuis</h1>'+
     '<p style="margin:4px 0 0;font-size:12.5px;color:#FFD6E5;line-height:1.5">Semua soal bersumber dari materi utama.</p>'+
-    '<span class="chip" style="margin-top:12px;background:rgba(255,255,255,.2);color:#fff">'+doneLv()+'/2 level dikerjakan</span></div>'+
+    '<span class="chip" style="margin-top:12px;background:rgba(255,255,255,.2);color:#fff">'+(multi ? doneLv()+'/'+L.length+' level dikerjakan' : L.length ? (doneLv()?'Sudah dikerjakan':'Belum dikerjakan') : 'Belum dibuka')+'</span></div>'+
     '<div class="qimg"><img src="'+IMG.checklist+'" alt="Ilustrasi daftar periksa"></div></div>'+
   '<div class="body pad" style="padding-top:4px">'+
     (p ? '<div class="period">'+ic('cal','#8A4B00',18)+'<span>Periode kuis <b>'+fmtDay(p.mulai)+'</b> sampai <b>'+fmtDay(p.selesai)+'</b>.'+(p.belum?' Belum dimulai.':p.lewat?' Sudah berakhir.':' Sisa '+p.sisa+' hari.')+'</span></div>' : '')+
-    lvCard(1,'var(--pink)','var(--pink-l)')+lvCard(2,'var(--purple)','var(--purple-l)')+
-    '<div style="width:100%;text-align:left;margin-top:14px;padding:18px;border-radius:24px;background:var(--sand);border:2px dashed #D9CFBF"><div class="row">'+
-      '<span class="avatar" style="width:50px;height:50px;border-radius:17px;background:var(--line)">'+ic('lock','#6B6A85',22)+'</span><span class="grow"><span style="display:block;font-family:Inter,sans-serif;font-size:19px;font-weight:600;color:var(--muted)">Kuis Level 3</span>'+
-      '<span style="display:block;margin-top:2px;font-size:11.5px;color:var(--muted)">'+lvInfo(3).note+'</span></span></div></div>'+
+    (L.length ? L.map(function(n){ return lvCard(n, COL[n][0], COL[n][1]); }).join('')
+      : '<div style="width:100%;text-align:left;margin-top:14px;padding:18px;border-radius:24px;background:var(--sand);border:2px dashed #D9CFBF"><div class="row">'+
+        '<span class="avatar" style="width:50px;height:50px;border-radius:17px;background:var(--line)">'+ic('lock','#6B6A85',22)+'</span><span class="grow"><span style="display:block;font-family:Inter,sans-serif;font-size:19px;font-weight:600;color:var(--muted)">Kuis belum dibuka</span>'+
+        '<span style="display:block;margin-top:2px;font-size:11.5px;color:var(--muted)">Pantau terus, kuis akan dibuka oleh admin.</span></span></div></div>')+
     '<div class="card" style="margin-top:16px;padding:15px 17px"><div class="label">ATURAN MAIN</div><div class="col" style="gap:8px;margin-top:9px;font-size:12px;color:var(--muted);line-height:1.55">'+
     rules.map(function(r,i){ return '<div class="row" style="align-items:flex-start;gap:9px"><b style="color:var(--pink)">'+(i+1)+'.</b><span>'+r+'</span></div>'; }).join('')+'</div></div>'+
     '<div style="height:22px"></div></div>'+tabbar('quiz-level');
@@ -2593,16 +2621,16 @@ R['kamus'] = function(){
 
 /* ---------- Profil ---------- */
 R['profil'] = function(){
-  var u = S.user, done = [1,2].filter(function(n){ return S.hasil[n]; });
+  var u = S.user, LV = shownLv(), done = LV.filter(function(n){ return S.hasil[n]; });
   var avg = done.length ? Math.round(done.reduce(function(a,n){ return a + S.hasil[n].skor; }, 0) / done.length) : '-';
   return '<div class="head-dk"><div class="row"><button class="icon-btn dk" data-act="tab" data-arg="beranda" aria-label="Kembali ke beranda">'+ic('back','#fff',20)+'</button><h2 class="grow" style="font-size:17px">Profil Saya</h2></div>'+
   '<div class="row" style="margin-top:16px;gap:14px">'+avatar(initials(u.nama),62,'var(--yellow)','#4A2800',20)+'<div class="grow"><div style="font-family:Inter,sans-serif;font-size:19px;font-weight:600">'+esc(u.nama)+'</div>'+
   '<div style="margin-top:2px;font-size:12.5px;color:#A8A5C4">KPwBI Daerah Istimewa Yogyakarta</div><div style="margin-top:7px;display:flex;gap:6px"><span class="chip" style="background:var(--purple);color:#fff">'+u.kategori.toUpperCase()+'</span></div></div></div></div>'+
   '<div class="body pad" style="padding-top:16px"><div class="tgrid" style="gap:10px">'+
-    [[done.length+'/2','Level dikerjakan','var(--pink)'],[avg,'Rata-rata skor','var(--orange)']].map(function(s){
+    [[LV.length>1 ? done.length+'/'+LV.length : (done.length?'Selesai':'Belum'), LV.length>1?'Level dikerjakan':'Status kuis','var(--pink)'],[avg, LV.length>1?'Rata-rata skor':'Skor kuis','var(--orange)']].map(function(s){
       return '<div class="card" style="padding:13px"><b style="display:block;font-family:Inter,sans-serif;font-size:23px;color:'+s[2]+'">'+s[0]+'</b><span style="font-size:11px;color:var(--muted)">'+s[1]+'</span></div>'; }).join('')+'</div>'+
     '<div class="label" style="margin-top:18px">RIWAYAT KUIS</div><div class="col" style="gap:8px;margin-top:10px">'+
-    [1,2].map(function(n){
+    (LV.length?'':'<div style="padding:12px 14px;border-radius:16px;background:var(--sand);border:1px dashed #D9CFBF;font-size:12px;color:var(--muted)">Kuis belum dibuka.</div>')+LV.map(function(n){
       var h = S.hasil[n];
       if(!h) return '<div class="row" style="padding:12px 14px;gap:12px;border-radius:16px;background:var(--sand);border:1px dashed #D9CFBF">'+avatar('L'+n,37,'var(--line)','var(--muted)',12)+'<span class="grow"><b style="font-size:12.5px;color:var(--muted)">'+lvName(n)+'</b><span style="display:block;margin-top:2px;font-size:11px;color:var(--muted)">Belum dikerjakan</span></span></div>';
       return '<button class="card row" style="padding:12px 14px;gap:12px;width:100%;text-align:left" data-act="review" data-arg="'+n+'">'+avatar('L'+n,37,n===1?'var(--pink-l)':'var(--purple-l)',n===1?'var(--pink-d)':'var(--purple-d)',12)+
@@ -2623,28 +2651,71 @@ function admHead(title, sub, right){
 function sub(t, mt){ return '<div style="font-size:11px;font-weight:700;color:#A8A5C4;letter-spacing:.06em;margin-top:'+(mt==null?18:mt)+'px">'+t+'</div>'; }
 function aRow(title, desc, act, arg, right){ return '<button class="row" style="width:100%;text-align:left;color:#fff" data-act="'+act+'"'+(arg?' data-arg="'+arg+'"':'')+'><div class="grow"><b style="font-size:13px">'+title+'</b><div style="font-size:11px;color:#A8A5C4;margin-top:2px">'+desc+'</div></div>'+(right||ic('chev','#A8A5C4',18))+'</button>'; }
 function stepper(k, v){ return '<div class="stepper"><button data-act="step" data-arg="'+k+':-1" aria-label="Kurangi">&minus;</button><b>'+v+'</b><button data-act="step" data-arg="'+k+':1" aria-label="Tambah">+</button></div>'; }
+/* level yang ditampilkan di panel admin: hanya level yang sedang dibuka */
+function admLv(){
+  var c = ADM.pengaturan, L = LEVELS.filter(function(n){ return !!c['buka_l'+n]; });
+  if(L.length) return L;
+  L = LEVELS.filter(function(n){ return ADM.peserta.some(function(p){ return p['l'+n] != null; }); });
+  return L.length ? L : [1];
+}
+/* leaderboard per level: 80% skor level + 20% kecepatan (bila periode diatur) */
+function admPeriode(){
+  var c = ADM.pengaturan; if(!c.periode_mulai || !c.periode_selesai) return null;
+  var m = new Date(String(c.periode_mulai).slice(0,10)+'T00:00:00+07:00').getTime(), s = new Date(String(c.periode_selesai).slice(0,10)+'T00:00:00+07:00').getTime() + 864e5;
+  return s > m ? {m:m, s:s} : null;
+}
+function lbLevel(n){
+  var pr = admPeriode(), rows = [];
+  ADM.peserta.forEach(function(p){
+    var sk = p['l'+n]; if(sk == null) return;
+    var at = p['l'+n+'_at'], k = pr ? Math.max(0, Math.min(100, 100 * (pr.s - new Date(at).getTime()) / (pr.s - pr.m))) : null;
+    rows.push({nama:p.nama, kategori:p.kategori, level:n, skor:sk, durasi:p['l'+n+'_durasi'], selesai_at:at,
+      kecepatan: k == null ? null : Math.round(k*10)/10, skor_akhir: Math.round((k == null ? sk : 0.8*sk + 0.2*k) * 10) / 10});
+  });
+  rows.sort(function(x, y){ return y.skor_akhir - x.skor_akhir || new Date(x.selesai_at) - new Date(y.selesai_at); });
+  rows.forEach(function(r, i){ r.peringkat = i + 1; });
+  return rows;
+}
+var LBLV = 1;
+function lbCur(){ var L = admLv(); if(L.indexOf(LBLV) < 0) LBLV = L[0]; return LBLV; }
+function lbTabs(){
+  var L = admLv(); if(L.length < 2) return '';
+  return '<div class="tabs2" style="margin-top:10px">'+L.map(function(n){ return '<button class="'+(lbCur()===n?'on':'')+'" data-act="lbTab" data-arg="'+n+'">Level '+n+'</button>'; }).join('')+'</div>';
+}
 function leaderRow(r, i){
   var c = i===0?['var(--yellow)','#4A2800']:i===1?['#C9CDDA','#221F3A']:i===2?['#D9A15C','#3A1F00']:['#3A3859','#A8A5C4'];
   return '<div class="qrow" style="align-items:center">'+avatar(r.peringkat,32,c[0],c[1],10)+
-    '<span class="grow"><b style="font-size:12.5px;display:block">'+esc(r.nama)+'</b><span style="font-size:10.5px;color:#A8A5C4">'+r.kategori+' &middot; L1 '+r.l1+' &middot; L2 '+r.l2+(r.kecepatan!=null?' &middot; kecepatan '+fmtNum(r.kecepatan):'')+'</span></span>'+
+    '<span class="grow"><b style="font-size:12.5px;display:block">'+esc(r.nama)+'</b><span style="font-size:10.5px;color:#A8A5C4">'+r.kategori+' &middot; skor '+r.skor+(r.kecepatan!=null?' &middot; kecepatan '+fmtNum(r.kecepatan):'')+' &middot; '+fmtDate(r.selesai_at,true)+'</span></span>'+
     '<b style="font-family:Inter,sans-serif;font-size:16px;color:'+(i<3?'var(--mint)':'#fff')+'">'+fmtNum(Number(r.skor_akhir).toFixed(1))+'</b></div>';
 }
-function admStats(){
-  var p = ADM.peserta, n = p.length || 1;
-  function avg(k){ var l = p.filter(function(x){ return x[k]!=null; }); return l.length ? Math.round(l.reduce(function(a,x){ return a+x[k]; },0)/l.length) : '-'; }
-  function part(cat){ var l = p.filter(function(x){ return x.kategori===cat; }); if(!l.length) return 0; return Math.round(100*l.filter(function(x){ return x.l1!=null || x.l2!=null; }).length/l.length); }
-  return {l1:p.filter(function(x){ return x.l1!=null; }).length, l2:p.filter(function(x){ return x.l2!=null; }).length,
-    both:p.filter(function(x){ return x.l1!=null && x.l2!=null; }).length, avg1:avg('l1'), avg2:avg('l2'),
-    part:Math.round(100*p.filter(function(x){ return x.l1!=null || x.l2!=null; }).length/n), org:part('Organik'), non:part('Non-Organik')};
+function lbNote(n){
+  return admPeriode() ? 'Skor akhir = 80% skor Level '+n+' + 20% kecepatan mengumpulkan dalam periode. Skor sama, yang lebih dulu selesai unggul.'
+                      : 'Periode kuis belum diatur, jadi peringkat memakai skor Level '+n+' saja. Skor sama, yang lebih dulu selesai unggul.';
 }
+function admStats(){
+  var p = ADM.peserta, n = p.length || 1, L = admLv();
+  function ikut(x){ return L.some(function(l){ return x['l'+l] != null; }); }
+  function avg(k){ var l = p.filter(function(x){ return x[k]!=null; }); return l.length ? Math.round(l.reduce(function(a,x){ return a+x[k]; },0)/l.length) : '-'; }
+  function part(cat){ var l = p.filter(function(x){ return x.kategori===cat; }); if(!l.length) return 0; return Math.round(100*l.filter(ikut).length/l.length); }
+  var st = {ikut:p.filter(ikut).length, semua:p.filter(function(x){ return L.every(function(l){ return x['l'+l] != null; }); }).length,
+    part:Math.round(100*p.filter(ikut).length/n), org:part('Organik'), non:part('Non-Organik')};
+  LEVELS.forEach(function(l){ st['l'+l] = p.filter(function(x){ return x['l'+l]!=null; }).length; st['avg'+l] = avg('l'+l); });
+  return st;
+}
+var LVCOL = {1:'#FF7BAC', 2:'#8A6FFF'};
 R['admin'] = function(){
-  var c = ADM.pengaturan, st = admStats(), lb = ADM.leaderboard;
+  var c = ADM.pengaturan, st = admStats(), L = admLv(), n = lbCur(), lb = lbLevel(n);
+  var top = [[ADM.peserta.length,'Peserta','var(--mint)']].concat(L.map(function(l){ return [st['l'+l], L.length>1?'Selesai L'+l:'Sudah ikut', LVCOL[l]]; }), [[ADM.saran.length,'Saran','var(--yellow)']]);
+  var tiles = L.map(function(l){ return [st['avg'+l], L.length>1?'Rata-rata skor L'+l:'Rata-rata skor', LVCOL[l]]; });
+  if(L.length > 1) tiles.push([st.semua, 'Selesai semua level', 'var(--yellow)']);
+  tiles.push([st.part+'%', 'Partisipasi total', '#8A6FFF']);
+  if(tiles.length % 2) tiles.push([st.ikut, 'Peserta sudah ikut', 'var(--mint)']);
   return '<div style="padding:22px 22px 16px;background:#221F3A;border-radius:0 0 24px 24px"><div class="row">'+
   '<span class="sq" style="width:40px;height:40px;border-radius:13px;background:#3A3859">'+ic('gear','#fff',20)+'</span>'+
   '<div class="grow"><h2 style="font-size:18px;color:#fff">Panel Super Admin</h2><div style="font-size:11.5px;color:#A8A5C4">'+esc(ADM.admin)+(API.REMOTE?'':' &middot; mode demo')+'</div></div>'+
   '<button class="chip" style="background:#3A3859;color:#fff;padding:8px 12px" data-act="admReload">'+ic('refresh','#fff',14)+' Muat ulang</button></div>'+
-  '<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-top:16px">'+
-  [[ADM.peserta.length,'Peserta','var(--mint)'],[st.l1,'Selesai L1','#FF7BAC'],[st.l2,'Selesai L2','#8A6FFF'],[ADM.saran.length,'Saran','var(--yellow)']].map(function(s){
+  '<div style="display:grid;grid-template-columns:repeat('+top.length+',minmax(0,1fr));gap:7px;margin-top:16px">'+
+  top.map(function(s){
     return '<div class="stat" style="background:#15142A;padding:11px 4px"><b style="color:'+s[2]+';font-size:19px">'+s[0]+'</b><span style="color:#A8A5C4;font-size:10px">'+s[1]+'</span></div>'; }).join('')+'</div></div>'+
   '<div class="body pad pb" style="padding-top:0">'+
   sub('PERIODE KUIS')+'<div class="acard" style="margin-top:9px"><div class="cols2" style="display:grid;grid-template-columns:1fr 1fr;gap:9px">'+
@@ -2653,36 +2724,102 @@ R['admin'] = function(){
     '<p style="margin:10px 0 0;font-size:10.5px;color:#A8A5C4;line-height:1.6">Di luar periode, kuis tertutup. Skor kecepatan: hari pertama 100, akhir periode 0, proporsional. '+(c.periode_mulai&&c.periode_selesai?'':'<b style="color:var(--yellow)">Periode belum diatur, sehingga peringkat sementara hanya memakai skor kuis.</b>')+'</p>'+
     '<button class="btn btn-sm" style="margin-top:12px;background:var(--purple);color:#fff;padding:12px" data-act="savePeriode">Simpan Periode</button></div>'+
   sub('PENGATURAN KUIS')+'<div class="acard" style="margin-top:9px">'+
-    '<div class="row"><div class="grow"><b style="font-size:13px">Jumlah soal Level 1</b><div style="font-size:11px;color:#A8A5C4;margin-top:2px">Dari '+nAktif(ADM.soal_l1)+' soal aktif. Mengubah jumlah membuat paket baru</div></div>'+stepper('n1',c.n1)+'</div>'+
-    '<div class="row" style="margin-top:14px"><div class="grow"><b style="font-size:13px">Jumlah soal Level 2</b><div style="font-size:11px;color:#A8A5C4;margin-top:2px">Dari '+nAktif(ADM.soal_l2)+' kasus aktif. Mengubah jumlah membuat paket baru</div></div>'+stepper('n2',c.n2)+'</div>'+
-    [[1,'buka_l1','Kuis Level 1'],[2,'buka_l2','Kuis Level 2']].map(function(l){
-      return '<div class="row" style="margin-top:14px"><div class="grow"><b style="font-size:13px">'+l[2]+' dibuka</b><div style="font-size:11px;color:#A8A5C4;margin-top:2px">Matikan untuk menutup sementara</div></div><button class="sw'+(c[l[1]]?' on':'')+'" data-act="sw" data-arg="'+l[1]+'" aria-label="Buka '+l[2]+'"><i></i></button></div>'; }).join('')+'</div>'+
+    LEVELS.map(function(l, i){
+      var on = !!c['buka_l'+l];
+      return '<div class="row" style="'+(i?'margin-top:16px;padding-top:14px;border-top:1px solid #2E2C4A':'')+'"><div class="grow"><b style="font-size:13px">Kuis Level '+l+'</b><div style="font-size:11px;color:'+(on?'var(--mint)':'#A8A5C4')+';margin-top:2px">'+(on?'Dibuka untuk peserta':'Ditutup, tidak tampil di aplikasi peserta')+'</div></div><button class="sw'+(on?' on':'')+'" data-act="sw" data-arg="buka_l'+l+'" aria-label="Buka Kuis Level '+l+'"><i></i></button></div>'+
+        (on ? '<div class="row" style="margin-top:12px"><div class="grow"><b style="font-size:12.5px">Jumlah soal</b><div style="font-size:11px;color:#A8A5C4;margin-top:2px">Dari '+nAktif(ADM['soal_l'+l])+' '+(l===1?'soal':'kasus')+' aktif. Mengubah jumlah membuat paket baru</div></div>'+stepper('n'+l,c['n'+l])+'</div>' : '');
+    }).join('')+'</div>'+
   sub('STATISTIK PESERTA')+'<div class="acard" style="margin-top:9px"><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px">'+
-    '<div class="stat" style="background:#15142A"><b style="color:var(--mint)">'+st.avg1+'</b><span style="color:#A8A5C4">Rata-rata skor L1</span></div><div class="stat" style="background:#15142A"><b style="color:#FF7BAC">'+st.avg2+'</b><span style="color:#A8A5C4">Rata-rata skor L2</span></div>'+
-    '<div class="stat" style="background:#15142A"><b style="color:var(--yellow)">'+st.both+'</b><span style="color:#A8A5C4">Selesai L1 &amp; L2</span></div><div class="stat" style="background:#15142A"><b style="color:#8A6FFF">'+st.part+'%</b><span style="color:#A8A5C4">Partisipasi total</span></div></div>'+
+    tiles.map(function(t){ return '<div class="stat" style="background:#15142A"><b style="color:'+t[2]+'">'+t[0]+'</b><span style="color:#A8A5C4">'+t[1]+'</span></div>'; }).join('')+'</div>'+
     '<div style="margin-top:12px;font-size:11px;font-weight:700;color:#A8A5C4">PARTISIPASI PER KATEGORI</div>'+
     [['Organik',st.org,'var(--purple)'],['Non-Organik',st.non,'var(--orange-b)']].map(function(r){ return '<div class="row" style="gap:10px;margin-top:8px;font-size:11.5px"><span style="width:84px">'+r[0]+'</span><span class="bar grow" style="background:#15142A;height:8px"><i style="width:'+r[1]+'%;background:'+r[2]+'"></i></span><b>'+r[1]+'%</b></div>'; }).join('')+'</div>'+
-  '<div class="row" style="margin-top:18px"><span class="grow" style="font-size:11px;font-weight:700;color:#A8A5C4;letter-spacing:.06em">LEADERBOARD</span><button class="chip" style="background:var(--purple);color:#fff;padding:7px 13px" data-go="admin-leaderboard">Lihat semua</button></div>'+
-  '<p style="margin:6px 0 0;font-size:10.5px;color:#A8A5C4;line-height:1.6">Skor akhir = 80% rata-rata skor L1 dan L2 + 20% kecepatan mengumpulkan. Skor sama, yang lebih dulu selesai unggul.</p><div class="col" style="gap:8px;margin-top:9px">'+
-    (lb.length ? lb.slice(0,3).map(leaderRow).join('') : '<div style="padding:13px;border-radius:14px;border:1px dashed #3A3859;font-size:11.5px;color:#A8A5C4;text-align:center">Belum ada peserta yang menyelesaikan Level 1 dan Level 2.</div>')+'</div>'+
+  '<div class="row" style="margin-top:18px"><span class="grow" style="font-size:11px;font-weight:700;color:#A8A5C4;letter-spacing:.06em">LEADERBOARD'+(L.length>1?'':' LEVEL '+n)+'</span><button class="chip" style="background:var(--purple);color:#fff;padding:7px 13px" data-go="admin-leaderboard">Lihat semua</button></div>'+
+  lbTabs()+
+  '<p style="margin:8px 0 0;font-size:10.5px;color:#A8A5C4;line-height:1.6">'+lbNote(n)+'</p><div class="col" style="gap:8px;margin-top:9px">'+
+    (lb.length ? lb.slice(0,3).map(leaderRow).join('') : '<div style="padding:13px;border-radius:14px;border:1px dashed #3A3859;font-size:11.5px;color:#A8A5C4;text-align:center">Belum ada peserta yang menyelesaikan Kuis Level '+n+'.</div>')+'</div>'+
+  sub('UNDIAN')+'<div class="acard" style="margin-top:9px;display:flex;flex-direction:column;gap:14px">'+
+    aRow('Spin wheel peserta beruntung', undPool().length+' peserta sudah mengisi kuis &middot; '+UND.winners.length+' pemenang terpilih','go','admin-undian',ic('star','#FFC53D',19,'#FFC53D',1))+'</div>'+
   sub('KELOLA')+'<div class="acard" style="margin-top:9px;display:flex;flex-direction:column;gap:14px">'+
     aRow('Bank soal', nAktif(ADM.soal_l1)+' soal Level 1 &middot; '+nAktif(ADM.soal_l2)+' kasus Level 2 aktif','go','admin-soal')+
     aRow('Materi belajar', 'Tampil/sembunyi dan kategori utama/tambahan','go','admin-materi')+
     aRow('Peserta', 'Tambah, reset PIN, buka ulang kesempatan kuis','go','admin-peserta')+
     aRow('Saran peserta', ADM.saran.length+' saran masuk','go','admin-saran')+'</div>'+
   sub('LAPORAN')+'<div class="acard" style="margin-top:9px;display:flex;flex-direction:column;gap:14px">'+
-    aRow('Unduh rekap (Excel)','Rekap peserta, leaderboard, dan saran','export','',ic('download','#34D399',19))+'</div>'+
+    aRow('Unduh rekap (Excel)','Rekap peserta, leaderboard per level, undian, dan saran','export','',ic('download','#34D399',19))+'</div>'+
   sub('AKUN')+'<div class="acard" style="margin-top:9px;display:flex;flex-direction:column;gap:14px">'+
     aRow('Ganti password admin','Minimal 8 karakter','admPass','',ic('key','#A8A5C4',18))+'</div>'+
   '<button class="btn btn-sm" style="margin-top:18px;background:#221F3A;color:#A8A5C4" data-act="adminOut">Keluar dari Panel Admin</button><div style="height:10px"></div></div>';
 };
 R['admin-leaderboard'] = function(){
-  var lb = ADM.leaderboard;
-  return admHead('Leaderboard', lb.length+' peserta sudah menyelesaikan Level 1 &amp; Level 2')+
-  '<div class="row" style="margin-top:14px;padding:13px 15px;border-radius:16px;background:#15142A;gap:10px;align-items:flex-start">'+ic('star','#FFC53D',20,'#FFC53D',1)+
-  '<span style="font-size:11.5px;color:#C9C6E0;line-height:1.6">Skor akhir = <b style="color:#fff">80% skor kuis</b> + <b style="color:#fff">20% kecepatan</b>. Kecepatan dihitung dari tanggal submit tiap level dalam periode kuis, lalu dirata-rata.</span></div></div>'+
+  var n = lbCur(), lb = lbLevel(n);
+  return admHead('Leaderboard Level '+n, lb.length+' peserta sudah menyelesaikan Kuis Level '+n)+
+  lbTabs()+
+  '<div class="row" style="margin-top:12px;padding:13px 15px;border-radius:16px;background:#15142A;gap:10px;align-items:flex-start">'+ic('star','#FFC53D',20,'#FFC53D',1)+
+  '<span style="font-size:11.5px;color:#C9C6E0;line-height:1.6">'+lbNote(n)+'</span></div></div>'+
   '<div class="body pad pb" style="padding-top:16px"><div class="col" style="gap:8px">'+(lb.length?lb.map(leaderRow).join(''):'<div style="padding:13px;border-radius:14px;border:1px dashed #3A3859;font-size:11.5px;color:#A8A5C4;text-align:center">Belum ada data.</div>')+'</div></div>';
 };
+
+/* ---------- Undian peserta beruntung (spin wheel) ---------- */
+var UND = {n:3, excl:0, winners:[], spinning:false, angle:0, cur:''};
+(function(){ try { var x = JSON.parse(LS.get('celengan_undian') || 'null'); if(x){ UND.n = x.n || 3; UND.excl = x.excl || 0; UND.winners = x.winners || []; } } catch(e){} })();
+function undSave(){ LS.set('celengan_undian', JSON.stringify({n:UND.n, excl:UND.excl, winners:UND.winners})); }
+function undPool(){
+  if(!ADM) return [];
+  var L = admLv(), skip = {};
+  if(UND.excl > 0) L.forEach(function(l){ lbLevel(l).slice(0, UND.excl).forEach(function(r){ skip[r.nama] = 1; }); });
+  UND.winners.forEach(function(w){ skip[w.nama] = 1; });
+  return ADM.peserta.filter(function(p){ return !skip[p.nama] && L.some(function(l){ return p['l'+l] != null; }); });
+}
+var WHEEL_COL = ['#6C4BF6','#D6336C','#FFC53D','#34D399','#FF8A3D','#4F32D6','#FF7BAC','#047857'];
+function drawWheel(){
+  var cv = $('wheel'); if(!cv) return;
+  var pool = undPool(), dpr = window.devicePixelRatio || 1, sz = cv.clientWidth || 280;
+  cv.width = sz*dpr; cv.height = sz*dpr;
+  var g = cv.getContext('2d'); g.setTransform(dpr,0,0,dpr,0,0);
+  var r = sz/2, n = Math.max(pool.length, 1), seg = 2*Math.PI/n;
+  g.clearRect(0,0,sz,sz);
+  for(var i=0;i<n;i++){
+    g.beginPath(); g.moveTo(r,r); g.arc(r,r,r-4,i*seg,(i+1)*seg); g.closePath();
+    g.fillStyle = pool.length ? WHEEL_COL[(i + (n%WHEEL_COL.length===1 && i===n-1 ? 1 : 0)) % WHEEL_COL.length] : '#3A3859'; g.fill();
+    if(n > 1 && n <= 60){ g.strokeStyle = 'rgba(21,20,42,.35)'; g.lineWidth = 1; g.stroke(); }
+  }
+  if(pool.length && n <= 24){
+    g.fillStyle = '#fff'; g.font = '600 '+(n<=12?11:9)+'px Inter,system-ui,sans-serif'; g.textAlign = 'right'; g.textBaseline = 'middle';
+    for(var j=0;j<n;j++){ g.save(); g.translate(r,r); g.rotate((j+.5)*seg); var w = String(pool[j].nama).split(' ').filter(Boolean), t = w[0] + (w[1] ? ' '+w[1].charAt(0)+'.' : ''); if(t.length>13) t = t.slice(0,12)+'…'; g.fillText(t, r-14, 0); g.restore(); }
+  }
+  g.beginPath(); g.arc(r,r,r-4,0,2*Math.PI); g.lineWidth = 6; g.strokeStyle = '#15142A'; g.stroke();
+}
+function undName(){
+  var pool = undPool(), n = pool.length; if(!n) return '';
+  /* penunjuk di atas (sudut -90deg); cari segmen yang berada di bawah penunjuk */
+  var a = ((-90 - UND.angle) % 360 + 720) % 360, i = Math.floor(a / (360/n)) % n;
+  return pool[i].nama;
+}
+function setWheelAngle(){ var w = $('wheel'); if(w) w.style.transform = 'rotate('+UND.angle+'deg)'; var t = $('wname'); if(t) t.textContent = undName() || '-'; }
+R['admin-undian'] = function(){
+  var pool = undPool(), L = admLv(), left = UND.n - UND.winners.length, done = left <= 0;
+  return admHead('Undian Peserta Beruntung', 'Diundi acak dari peserta yang sudah mengisi kuis, tanpa melihat nilai')+'</div>'+
+  '<div class="body pad pb" style="padding-top:14px">'+
+  '<div class="acard">'+
+    '<div class="row"><div class="grow"><b style="font-size:13px">Jumlah pemenang</b><div style="font-size:11px;color:#A8A5C4;margin-top:2px">Berapa peserta yang mendapat hadiah undian</div></div>'+
+      '<div class="stepper"><button data-act="undStep" data-arg="n:-1" aria-label="Kurangi">&minus;</button><b>'+UND.n+'</b><button data-act="undStep" data-arg="n:1" aria-label="Tambah">+</button></div></div>'+
+    '<div class="row" style="margin-top:14px"><div class="grow"><b style="font-size:13px">Kecualikan juara leaderboard</b><div style="font-size:11px;color:#A8A5C4;margin-top:2px">'+(UND.excl?(UND.excl===1?'Peringkat 1':'Peringkat 1 sampai '+UND.excl)+(L.length>1?' tiap level':'')+' tidak ikut diundi':'Semua peserta yang sudah mengisi ikut diundi')+'</div></div>'+
+      '<div class="stepper"><button data-act="undStep" data-arg="excl:-1" aria-label="Kurangi">&minus;</button><b>'+UND.excl+'</b><button data-act="undStep" data-arg="excl:1" aria-label="Tambah">+</button></div></div>'+
+    '<p style="margin:12px 0 0;font-size:10.5px;color:#A8A5C4;line-height:1.6">Peserta yang ikut: sudah mengumpulkan '+(L.length>1?L.map(function(l){ return 'Level '+l; }).join(' atau '):'Kuis Level '+L[0])+'. Pemenang yang sudah terpilih tidak bisa terpilih lagi.</p></div>'+
+  '<div class="wheel-wrap"><div class="wheel-pin"></div><canvas id="wheel" class="wheel" style="transform:rotate('+UND.angle+'deg)"></canvas><button class="wheel-hub" data-act="spin" aria-label="Putar roda"'+(done||!pool.length?' disabled':'')+'>PUTAR</button></div>'+
+  '<div class="wheel-name"><span style="font-size:10.5px;color:#A8A5C4;letter-spacing:.06em;font-weight:700">'+(UND.winners.length?'PEMENANG TERAKHIR':'SIAP DIUNDI')+'</span><b id="wname">'+(UND.winners.length?esc(UND.winners[UND.winners.length-1].nama):'Tekan PUTAR untuk mengundi')+'</b></div>'+
+  '<button class="btn" style="margin-top:12px;background:var(--yellow);color:#4A2800'+(done||!pool.length?';opacity:.5':'')+'" data-act="spin"'+(done||!pool.length?' disabled':'')+'>'+
+    (done ? 'Semua pemenang sudah terpilih' : !pool.length ? 'Belum ada peserta yang bisa diundi' : 'Putar untuk pemenang ke-'+(UND.winners.length+1)+' dari '+UND.n)+'</button>'+
+  '<div style="margin-top:6px;font-size:11px;color:#A8A5C4;text-align:center">'+pool.length+' peserta di dalam roda</div>'+
+  '<div class="row" style="margin-top:18px"><span class="grow" style="font-size:11px;font-weight:700;color:#A8A5C4;letter-spacing:.06em">PEMENANG ('+UND.winners.length+'/'+UND.n+')</span>'+
+    (UND.winners.length?'<button class="chip" style="background:#3A3859;color:#fff;padding:7px 12px" data-act="undCopy">Salin</button><button class="chip" style="background:#5A3A3A;color:#FFB4A0;padding:7px 12px;margin-left:6px" data-act="undReset">Ulang</button>':'')+'</div>'+
+  '<div class="col" style="gap:8px;margin-top:9px">'+
+    (UND.winners.length ? UND.winners.map(function(w, i){ return '<div class="qrow" style="align-items:center">'+avatar(i+1,32,'var(--yellow)','#4A2800',10)+'<span class="grow"><b style="font-size:12.5px;display:block">'+esc(w.nama)+'</b><span style="font-size:10.5px;color:#A8A5C4">'+esc(w.kategori)+' &middot; diundi '+fmtDate(w.at,true)+'</span></span>'+ic('star','#FFC53D',18,'#FFC53D',1)+'</div>'; }).join('')
+      : '<div style="padding:13px;border-radius:14px;border:1px dashed #3A3859;font-size:11.5px;color:#A8A5C4;text-align:center">Belum ada pemenang. Tekan Putar untuk mulai mengundi.</div>')+'</div>'+
+  '<p style="margin:12px 0 0;font-size:10.5px;color:#A8A5C4;line-height:1.6">Hasil undian tersimpan di browser ini dan ikut di file rekap Excel. Simpan tangkapan layar sebagai dokumentasi.</p>'+
+  '<div style="height:10px"></div></div>';
+};
+AFTER['admin-undian'] = function(){ drawWheel(); };
 R['admin-materi'] = function(){
   var h = ADM.pengaturan.topik_sembunyi || [], k = ADM.pengaturan.topik_kategori || {};
   return admHead('Materi Belajar','Ketuk label untuk ubah utama/tambahan')+'</div>'+
@@ -2693,11 +2830,11 @@ R['admin-materi'] = function(){
 };
 function pList(){
   var q = S.pq.toLowerCase();
-  var l = ADM.peserta.filter(function(r){ return (S.pf==='Semua' || r.kategori===S.pf || (S.pf==='Belum ikut' && r.l1==null && r.l2==null)) && (!q || r.nama.toLowerCase().indexOf(q)>=0); });
+  var l = ADM.peserta.filter(function(r){ return (S.pf==='Semua' || r.kategori===S.pf || (S.pf==='Belum ikut' && admLv().every(function(l){ return r['l'+l]==null; }))) && (!q || r.nama.toLowerCase().indexOf(q)>=0); });
   if(!l.length) return '<div style="padding:14px;border-radius:14px;border:1px dashed #3A3859;font-size:11.5px;color:#A8A5C4;text-align:center">Tidak ada peserta yang cocok.</div>';
   function chip(lv, v){ return '<span class="lv-chip" style="background:'+(v!=null?(lv===1?'#5C1F3A':'#3A2A7A'):'#2A2845')+';color:'+(v!=null?'#fff':'#6B6A85')+'">L'+lv+' '+(v!=null?v:'-')+'</span>'; }
   return '<div style="font-size:11px;color:#A8A5C4;margin-bottom:2px">'+l.length+' peserta</div>'+l.map(function(r){ return '<div class="adm-row">'+avatar(initials(r.nama),38,r.kategori==='Organik'?'var(--purple)':'var(--orange-b)','#fff',12)+
-    '<span class="grow"><b style="font-size:12.5px;display:block">'+esc(r.nama)+'</b><span style="display:flex;gap:5px;margin-top:4px;align-items:center;flex-wrap:wrap">'+chip(1,r.l1)+chip(2,r.l2)+'<span style="font-size:10px;color:#A8A5C4">'+r.kategori+(r.pin_default?' &middot; PIN awal':'')+'</span></span></span>'+
+    '<span class="grow"><b style="font-size:12.5px;display:block">'+esc(r.nama)+'</b><span style="display:flex;gap:5px;margin-top:4px;align-items:center;flex-wrap:wrap">'+admLv().map(function(l){ return chip(l, r['l'+l]); }).join('')+'<span style="font-size:10px;color:#A8A5C4">'+r.kategori+(r.pin_default?' &middot; PIN awal':'')+'</span></span></span>'+
     '<button class="chip" style="background:#3A3859;color:#fff;flex:0 0 auto" data-act="pMenu" data-arg="'+esc(r.nama)+'">Kelola</button></div>'; }).join('');
 }
 R['admin-peserta'] = function(){
@@ -2790,21 +2927,26 @@ function loadXLSX(){
     s.onload = function(){ window.XLSX ? res(window.XLSX) : rej(new Error('x')); }; s.onerror = rej; document.head.appendChild(s); });
 }
 function exportRows(){
-  var rekap = [['Nama','Kategori','Skor L1','Tanggal L1','Durasi L1 (menit)','Skor L2','Tanggal L2','Durasi L2 (menit)','Status']].concat(ADM.peserta.map(function(p){
-    return [p.nama, p.kategori, p.l1, p.l1_at?fmtDate(p.l1_at,true):'', p.l1_durasi!=null?Math.round(p.l1_durasi/6)/10:'', p.l2, p.l2_at?fmtDate(p.l2_at,true):'', p.l2_durasi!=null?Math.round(p.l2_durasi/6)/10:'',
-      p.l1!=null&&p.l2!=null?'Selesai L1 & L2':p.l1!=null||p.l2!=null?'Sebagian':'Belum ikut']; }));
-  var lb = [['Peringkat','Nama','Kategori','Skor L1','Skor L2','Kecepatan','Skor Akhir','Selesai']].concat(ADM.leaderboard.map(function(r){
-    return [r.peringkat, r.nama, r.kategori, r.l1, r.l2, r.kecepatan, r.skor_akhir, fmtDate(r.selesai_at,true)]; }));
+  var L = admLv();
+  var head = ['Nama','Kategori']; L.forEach(function(l){ head.push('Skor L'+l, 'Tanggal L'+l, 'Durasi L'+l+' (menit)'); }); head.push('Status');
+  var rekap = [head].concat(ADM.peserta.map(function(p){
+    var row = [p.nama, p.kategori], d = 0;
+    L.forEach(function(l){ var v = p['l'+l]; if(v!=null) d++; row.push(v, p['l'+l+'_at']?fmtDate(p['l'+l+'_at'],true):'', p['l'+l+'_durasi']!=null?Math.round(p['l'+l+'_durasi']/6)/10:''); });
+    row.push(d === 0 ? 'Belum ikut' : d === L.length ? (L.length>1?'Selesai semua level':'Sudah ikut') : 'Sebagian'); return row; }));
+  var lbs = L.map(function(l){ return ['Leaderboard L'+l, [['Peringkat','Nama','Kategori','Skor L'+l,'Kecepatan','Skor Akhir','Dikumpulkan']].concat(lbLevel(l).map(function(r){
+    return [r.peringkat, r.nama, r.kategori, r.skor, r.kecepatan, r.skor_akhir, fmtDate(r.selesai_at,true)]; }))]; });
+  var und = [['No','Nama','Kategori','Waktu Undian']].concat(UND.winners.map(function(w, i){ return [i+1, w.nama, w.kategori, fmtDate(w.at,true)]; }));
   var sr = [['Tanggal','Nama','Kategori','Konteks','Rating','Saran']].concat(ADM.saran.map(function(s){ return [fmtDate(s.dibuat,true), s.nama, s.kategori, s.konteks, s.rating, s.isi]; }));
-  return {rekap:rekap, lb:lb, saran:sr};
+  return {sheets:[['Rekap Peserta',rekap]].concat(lbs, UND.winners.length ? [['Undian',und]] : [], [['Saran',sr]]), rekap:rekap};
 }
+function fallbackCopy(t){ var x = document.createElement('textarea'); x.value = t; x.style.position = 'fixed'; x.style.opacity = '0'; document.body.appendChild(x); x.select(); try { document.execCommand('copy'); } catch(e){} x.remove(); }
 function download(name, blob){ var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 500); }
 function doExport(){
   var d = exportRows(), stamp = new Date().toISOString().slice(0,10);
   busy(true);
   loadXLSX().then(function(X){
     var wb = X.utils.book_new();
-    [['Rekap Peserta',d.rekap],['Leaderboard',d.lb],['Saran',d.saran]].forEach(function(s){ var ws = X.utils.aoa_to_sheet(s[1]); ws['!cols'] = s[1][0].map(function(h,i){ return {wch: i===0 && s[0]!=='Leaderboard' ? 28 : Math.max(12, String(h).length+2)}; }); X.utils.book_append_sheet(wb, ws, s[0]); });
+    d.sheets.forEach(function(s){ var ws = X.utils.aoa_to_sheet(s[1]); ws['!cols'] = s[1][0].map(function(h,i){ return {wch: (h==='Nama' || (i===0 && s[0]==='Rekap Peserta')) ? 30 : Math.max(12, String(h).length+2)}; }); X.utils.book_append_sheet(wb, ws, s[0]); });
     X.writeFile(wb, 'Rekap_CELENGAN_'+stamp+'.xlsx'); busy(false); toast('Rekap Excel diunduh.');
   }, function(){
     busy(false);
@@ -2976,7 +3118,54 @@ var A = {
     if(v === c[k]){ toast('Batas '+(d>0?'maksimal (jumlah soal aktif)':'minimal')+' tercapai.'); return; }
     var patch = {}; patch[k] = v; admDo(API.adminAtur(ATOK, patch));
   },
-  sw: function(el, a){ var v = !ADM.pengaturan[a], patch = {}; patch[a] = v; admDo(API.adminAtur(ATOK, patch), (a==='buka_l1'?'Level 1':'Level 2')+(v?' dibuka':' ditutup')+' untuk peserta.'); },
+  lbTab: function(el, a){ LBLV = +a; refresh(); },
+  undStep: function(el, a){
+    if(UND.spinning) return;
+    var p = a.split(':'), k = p[0], d = +p[1];
+    if(k === 'n'){ var mx = UND.winners.length + undPool().length; var v = Math.max(Math.max(1, UND.winners.length), Math.min(Math.max(mx,1), UND.n + d)); if(v === UND.n){ toast(d>0?'Jumlah pemenang tidak bisa melebihi peserta yang ikut.':'Batas minimal tercapai.'); return; } UND.n = v; }
+    else { var e = Math.max(0, Math.min(10, UND.excl + d)); if(e === UND.excl) return; UND.excl = e; UND.angle = 0; }
+    undSave(); refresh();
+  },
+  spin: function(){
+    if(UND.spinning) return;
+    var pool = undPool(), n = pool.length;
+    if(!n){ toast('Belum ada peserta yang bisa diundi.'); return; }
+    if(UND.winners.length >= UND.n){ toast('Semua pemenang sudah terpilih.'); return; }
+    var buf = new Uint32Array(1), idx;
+    if(window.crypto && crypto.getRandomValues){ crypto.getRandomValues(buf); idx = buf[0] % n; } else idx = Math.floor(Math.random()*n);
+    var seg = 360/n, off = (0.15 + 0.7*Math.random()) * seg;
+    /* sudut akhir agar segmen idx tepat di bawah penunjuk (atas, -90deg) */
+    var base = ((-90 - (idx*seg + off)) % 360 + 360) % 360;
+    var start = UND.angle, cur = ((start % 360) + 360) % 360;
+    var target = start - cur + 360*6 + base; if(target - start < 360*5) target += 360;
+    var dur = 5200, t0 = null; UND.spinning = true;
+    var hub = document.querySelectorAll('[data-act=spin]'); Array.prototype.forEach.call(hub, function(b){ b.disabled = true; });
+    var lbl = document.querySelector('.wheel-name span'); if(lbl) lbl.textContent = 'MEMUTAR...';
+    function ease(t){ return 1 - Math.pow(1 - t, 4); }
+    function step(ts){
+      if(t0 == null) t0 = ts;
+      var t = Math.min(1, (ts - t0) / dur);
+      UND.angle = start + (target - start) * ease(t); setWheelAngle();
+      if(t < 1){ requestAnimationFrame(step); return; }
+      UND.angle = target % 360; UND.spinning = false;
+      var w = pool[idx]; UND.winners.push({nama:w.nama, kategori:w.kategori, at:new Date().toISOString()}); undSave();
+      UND.angle = 0; refresh();
+      openSheet('<div class="win-pop"><div style="font-size:40px">&#127881;</div><div class="label" style="color:#A8A5C4;margin-top:4px">PEMENANG KE-'+UND.winners.length+'</div><div class="big">'+esc(w.nama)+'</div><div style="margin-top:4px;font-size:12px;color:#A8A5C4">'+esc(w.kategori)+'</div>'+
+        '<button class="btn btn-sm" style="margin-top:18px;background:var(--yellow);color:#4A2800" data-act="closeSheet">'+(UND.winners.length < UND.n ? 'Lanjut undi pemenang berikutnya' : 'Selesai')+'</button></div>', true);
+    }
+    requestAnimationFrame(step);
+  },
+  undCopy: function(){
+    var t = 'Pemenang Undian CELENGAN DIY\n' + UND.winners.map(function(w, i){ return (i+1)+'. '+w.nama+' ('+w.kategori+')'; }).join('\n');
+    function ok(){ toast('Daftar pemenang disalin.'); }
+    if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(ok, function(){ fallbackCopy(t); ok(); }); else { fallbackCopy(t); ok(); }
+  },
+  undReset: function(){
+    openSheet('<h2 style="font-size:19px">Ulang undian?</h2><p style="font-size:13px;color:#A8A5C4;line-height:1.6">Daftar '+UND.winners.length+' pemenang saat ini akan dihapus dari browser ini dan semua peserta kembali masuk ke roda.</p>'+
+      '<div class="col" style="gap:10px;margin-top:14px"><button class="btn btn-sm" style="background:#C2410C;color:#fff" data-act="doUndReset">Ya, ulang undian</button><button class="btn btn-sm" style="background:#3A3859;color:#fff" data-act="closeSheet">Batal</button></div>', true);
+  },
+  doUndReset: function(){ UND.winners = []; UND.angle = 0; undSave(); closeSheet(); refresh(); toast('Undian diulang dari awal.'); },
+  sw: function(el, a){ var v = !ADM.pengaturan[a], patch = {}; patch[a] = v; admDo(API.adminAtur(ATOK, patch), 'Kuis Level '+a.slice(-1)+(v?' dibuka untuk peserta.':' ditutup dan disembunyikan dari peserta.')); },
   toggleVis: function(el, a){
     var h = (ADM.pengaturan.topik_sembunyi || []).slice(), i = h.indexOf(a);
     if(i < 0){ if(TOPICS.length - h.length <= 1){ toast('Minimal satu topik harus tampil.'); return; } h.push(a); } else h.splice(i,1);
@@ -2991,7 +3180,7 @@ var A = {
   pMenu: function(el, nama){
     var r = ADM.peserta.filter(function(x){ return x.nama===nama; })[0]; if(!r) return;
     var e = esc(nama);
-    openSheet('<div class="label" style="color:#A8A5C4">KELOLA PESERTA</div><h2 style="font-size:19px;margin-top:4px">'+e+'</h2><p style="margin:4px 0 0;font-size:12px;color:#A8A5C4">'+r.kategori+' &middot; L1: '+(r.l1!=null?r.l1+' ('+fmtDate(r.l1_at,true)+')':'belum')+' &middot; L2: '+(r.l2!=null?r.l2+' ('+fmtDate(r.l2_at,true)+')':'belum')+'</p>'+
+    openSheet('<div class="label" style="color:#A8A5C4">KELOLA PESERTA</div><h2 style="font-size:19px;margin-top:4px">'+e+'</h2><p style="margin:4px 0 0;font-size:12px;color:#A8A5C4">'+r.kategori+admLv().map(function(l){ return ' &middot; L'+l+': '+(r['l'+l]!=null?r['l'+l]+' ('+fmtDate(r['l'+l+'_at'],true)+')':'belum'); }).join('')+'</p>'+
       '<div class="col" style="gap:9px;margin-top:16px">'+
       '<button class="btn btn-sm" style="background:#3A3859;color:#fff" data-act="resetPin" data-arg="'+e+'">Reset PIN ke 1234</button>'+
       (r.l1!=null?'<button class="btn btn-sm" style="background:#5C1F3A;color:#fff" data-act="reopen" data-arg="'+e+'|1">Buka ulang Kuis Level 1</button>':'')+
